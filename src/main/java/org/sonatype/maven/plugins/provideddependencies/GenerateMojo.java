@@ -7,7 +7,9 @@ import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.artifact.factory.ArtifactFactory;
@@ -96,7 +98,8 @@ public class GenerateMojo
             dep.setType( artifact.getType() );
             dep.setScope( "provided" );
 
-            List<String> exclusions = getExclusions( artifact.getDependencyFilter() );
+            //using a set to prevent duplicated entries
+            Set<String> exclusions = new LinkedHashSet<String>( getExclusions( artifact.getDependencyFilter() ) );
             for ( String exclusion : exclusions )
             {
                 String[] pattern = exclusion.split( ":" );
