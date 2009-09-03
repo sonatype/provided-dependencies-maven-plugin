@@ -98,7 +98,7 @@ public class GenerateMojo
             dep.setType( artifact.getType() );
             dep.setScope( "provided" );
 
-            //using a set to prevent duplicated entries
+            // using a set to prevent duplicated entries
             Set<String> exclusions = new LinkedHashSet<String>( getExclusions( artifact.getDependencyFilter() ) );
             for ( String exclusion : exclusions )
             {
@@ -113,6 +113,7 @@ public class GenerateMojo
             }
 
             dependencyManagement.addDependency( dep );
+            pom.addDependency( dep );
         }
 
         pom.setDependencyManagement( dependencyManagement );
