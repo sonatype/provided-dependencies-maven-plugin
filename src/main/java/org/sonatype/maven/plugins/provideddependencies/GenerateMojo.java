@@ -49,6 +49,11 @@ public class GenerateMojo
     private String artifactId;
 
     /**
+     * @parameter default-value="${project.artifactId}-compile"
+     */
+    private String compileDependenciesArtifactId;
+
+    /**
      * @parameter default-value="${project.version}"
      */
     private String version;
@@ -88,6 +93,44 @@ public class GenerateMojo
         pom.setPackaging( "pom" );
 
         DependencyManagement dependencyManagement = new DependencyManagement();
+        dependencyManagement.setDependencies( getDependencies( "provided" ) );
+        pom.setDependencyManagement( dependencyManagement );
+
+        persist( pom, "-dependencies.pom" );
+
+        pom.setDependencyManagement( null );
+        pom.setDependencies( getDependencies( "compile" ) );
+        pom.setArtifactId( compileDependenciesArtifactId );
+        persist( pom, "-compile.pom" );
+    }
+
+    private void persist( Model pom, String suffix )
+        throws MojoExecutionException
+    {
+        File file = new File( target, pom.getArtifactId() + suffix );
+
+        FileWriter writer = null;
+        try
+        {
+            file.createNewFile();
+            writer = new FileWriter( file );
+            new MavenXpp3Writer().write( writer, pom );
+        }
+        catch ( IOException e )
+        {
+            throw new MojoExecutionException( "Failed to generate pom", e );
+        }
+        IOUtil.close( writer );
+
+        Artifact artifact = artifactFactory.createArtifact( groupId, pom.getArtifactId(), version, null, "pom" );
+        artifact.setFile( file );
+
+        project.addAttachedArtifact( artifact );
+    }
+
+    private List<Dependency> getDependencies( String scope )
+    {
+        List<Dependency> dependencies = new ArrayList<Dependency>();
         for ( Artifact artifact : artifacts )
         {
             Dependency dep = new Dependency();
@@ -96,7 +139,7 @@ public class GenerateMojo
             dep.setVersion( artifact.getBaseVersion() );
             dep.setClassifier( artifact.getClassifier() );
             dep.setType( artifact.getType() );
-            dep.setScope( "provided" );
+            dep.setScope( scope );
 
             // using a set to prevent duplicated entries
             Set<String> exclusions = new LinkedHashSet<String>( getExclusions( artifact.getDependencyFilter() ) );
@@ -112,31 +155,9 @@ public class GenerateMojo
                 }
             }
 
-            dependencyManagement.addDependency( dep );
-            pom.addDependency( dep );
+            dependencies.add( dep );
         }
-
-        pom.setDependencyManagement( dependencyManagement );
-
-        File file = new File( target, artifactId + "-dependencies.pom" );
-
-        FileWriter writer = null;
-        try
-        {
-            file.createNewFile();
-            writer = new FileWriter( file );
-            new MavenXpp3Writer().write( writer, pom );
-        }
-        catch ( IOException e )
-        {
-            throw new MojoExecutionException( "Failed to generate pom", e );
-        }
-        IOUtil.close( writer );
-
-        Artifact artifact = artifactFactory.createArtifact( groupId, artifactId, version, null, "pom" );
-        artifact.setFile( file );
-
-        project.addAttachedArtifact( artifact );
+        return dependencies;
     }
 
     private List<String> getExclusions( ArtifactFilter filter )
