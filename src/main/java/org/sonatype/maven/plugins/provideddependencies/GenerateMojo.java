@@ -160,7 +160,7 @@ public class GenerateMojo
         return dependencies;
     }
 
-    private List<String> getExclusions( ArtifactFilter filter )
+    private Collection<String> getExclusions( ArtifactFilter filter )
     {
         if ( filter == null )
         {
@@ -175,7 +175,7 @@ public class GenerateMojo
         if ( filter instanceof AndArtifactFilter )
         {
             AndArtifactFilter af = (AndArtifactFilter) filter;
-            List<ArtifactFilter> filters = getFilters( af );
+            Collection<ArtifactFilter> filters = getFilters( af );
             List<String> patterns = new ArrayList<String>();
             for ( ArtifactFilter f : filters )
             {
@@ -191,13 +191,13 @@ public class GenerateMojo
     }
 
     @SuppressWarnings( "unchecked" )
-    private List<ArtifactFilter> getFilters( AndArtifactFilter af )
+    private Collection<ArtifactFilter> getFilters( AndArtifactFilter af )
     {
         try
         {
             Field f = AndArtifactFilter.class.getDeclaredField( "filters" );
             f.setAccessible( true );
-            return (List<ArtifactFilter>) f.get( af );
+            return (Collection<ArtifactFilter>) f.get( af );
         }
         catch ( Exception e )
         {
@@ -207,13 +207,13 @@ public class GenerateMojo
     }
 
     @SuppressWarnings( "unchecked" )
-    private List<String> getPatterns( ExcludesArtifactFilter efilter )
+    private Collection<String> getPatterns( ExcludesArtifactFilter efilter )
     {
         try
         {
             Field f = IncludesArtifactFilter.class.getDeclaredField( "patterns" );
             f.setAccessible( true );
-            return (List<String>) f.get( efilter );
+            return (Collection<String>) f.get( efilter );
         }
         catch ( Exception e )
         {
