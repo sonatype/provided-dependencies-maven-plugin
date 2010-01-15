@@ -12,7 +12,6 @@ import java.util.List;
 import java.util.Set;
 
 import org.apache.maven.artifact.Artifact;
-import org.apache.maven.artifact.DefaultArtifact;
 import org.apache.maven.artifact.factory.ArtifactFactory;
 import org.apache.maven.artifact.resolver.filter.AndArtifactFilter;
 import org.apache.maven.artifact.resolver.filter.ArtifactFilter;
@@ -94,13 +93,13 @@ public class GenerateMojo
         pom.setPackaging( "pom" );
 
         DependencyManagement dependencyManagement = new DependencyManagement();
-        dependencyManagement.setDependencies( getDependencies( DefaultArtifact.SCOPE_PROVIDED ) );
+        dependencyManagement.setDependencies( getDependencies( Artifact.SCOPE_PROVIDED ) );
         pom.setDependencyManagement( dependencyManagement );
 
         persist( pom, "-dependencies.pom" );
 
         pom.setDependencyManagement( null );
-        pom.setDependencies( getDependencies( DefaultArtifact.SCOPE_COMPILE ) );
+        pom.setDependencies( getDependencies( Artifact.SCOPE_COMPILE ) );
         pom.setArtifactId( compileDependenciesArtifactId );
         persist( pom, "-compile.pom" );
     }
@@ -141,9 +140,9 @@ public class GenerateMojo
             dep.setClassifier( artifact.getClassifier() );
             dep.setType( artifact.getType() );
 
-            if( DefaultArtifact.SCOPE_TEST.equals( artifact.getScope() ))
+            if( Artifact.SCOPE_TEST.equals( artifact.getScope() ))
             {
-                dep.setScope( DefaultArtifact.SCOPE_TEST );
+                dep.setScope( Artifact.SCOPE_TEST );
             }
             else
             {
