@@ -12,11 +12,13 @@ import java.util.List;
 import java.util.Set;
 
 import org.apache.maven.artifact.Artifact;
+import org.apache.maven.artifact.DefaultArtifact;
 import org.apache.maven.artifact.factory.ArtifactFactory;
 import org.apache.maven.artifact.resolver.filter.AndArtifactFilter;
 import org.apache.maven.artifact.resolver.filter.ArtifactFilter;
 import org.apache.maven.artifact.resolver.filter.ExcludesArtifactFilter;
 import org.apache.maven.artifact.resolver.filter.IncludesArtifactFilter;
+import org.apache.maven.artifact.resolver.filter.ScopeArtifactFilter;
 import org.apache.maven.model.Dependency;
 import org.apache.maven.model.DependencyManagement;
 import org.apache.maven.model.Exclusion;
@@ -93,13 +95,13 @@ public class GenerateMojo
         pom.setPackaging( "pom" );
 
         DependencyManagement dependencyManagement = new DependencyManagement();
-        dependencyManagement.setDependencies( getDependencies( "provided" ) );
+        dependencyManagement.setDependencies( getDependencies( DefaultArtifact.SCOPE_PROVIDED ) );
         pom.setDependencyManagement( dependencyManagement );
 
         persist( pom, "-dependencies.pom" );
 
         pom.setDependencyManagement( null );
-        pom.setDependencies( getDependencies( "compile" ) );
+        pom.setDependencies( getDependencies( DefaultArtifact.SCOPE_COMPILE ) );
         pom.setArtifactId( compileDependenciesArtifactId );
         persist( pom, "-compile.pom" );
     }
@@ -130,17 +132,27 @@ public class GenerateMojo
 
     private List<Dependency> getDependencies( String scope )
     {
+        ScopeArtifactFilter filter = new ScopeArtifactFilter( scope );
+        
         List<Dependency> dependencies = new ArrayList<Dependency>();
         for ( Artifact artifact : artifacts )
-        {
+        {      
             Dependency dep = new Dependency();
             dep.setGroupId( artifact.getGroupId() );
             dep.setArtifactId( artifact.getArtifactId() );
             dep.setVersion( artifact.getBaseVersion() );
             dep.setClassifier( artifact.getClassifier() );
             dep.setType( artifact.getType() );
-            dep.setScope( scope );
 
+            if( DefaultArtifact.SCOPE_TEST.equals( artifact.getScope() ))
+            {
+                dep.setScope( DefaultArtifact.SCOPE_TEST );
+            }
+            else
+            {
+                dep.setScope( scope );
+            }
+            
             // using a set to prevent duplicated entries
             Set<String> exclusions = new LinkedHashSet<String>( getExclusions( artifact.getDependencyFilter() ) );
             for ( String exclusion : exclusions )
@@ -157,6 +169,7 @@ public class GenerateMojo
 
             dependencies.add( dep );
         }
+
         return dependencies;
     }
 
