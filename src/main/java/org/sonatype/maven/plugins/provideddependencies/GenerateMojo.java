@@ -18,7 +18,6 @@ import org.apache.maven.artifact.resolver.filter.AndArtifactFilter;
 import org.apache.maven.artifact.resolver.filter.ArtifactFilter;
 import org.apache.maven.artifact.resolver.filter.ExcludesArtifactFilter;
 import org.apache.maven.artifact.resolver.filter.IncludesArtifactFilter;
-import org.apache.maven.artifact.resolver.filter.ScopeArtifactFilter;
 import org.apache.maven.model.Dependency;
 import org.apache.maven.model.DependencyManagement;
 import org.apache.maven.model.Exclusion;
@@ -132,8 +131,6 @@ public class GenerateMojo
 
     private List<Dependency> getDependencies( String scope )
     {
-        ScopeArtifactFilter filter = new ScopeArtifactFilter( scope );
-        
         List<Dependency> dependencies = new ArrayList<Dependency>();
         for ( Artifact artifact : artifacts )
         {      
