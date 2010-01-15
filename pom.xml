@@ -5,12 +5,12 @@
   <parent>
     <groupId>org.sonatype.plugins</groupId>
     <artifactId>plugins-parent</artifactId>
-    <version>5-SNAPSHOT</version>
+    <version>5</version>
     <relativePath>../plugins-parent/pom.xml</relativePath>
   </parent>
 
   <artifactId>provided-dependencies-maven-plugin</artifactId>
-  <version>1.2-SNAPSHOT</version>
+  <version>1.2</version>
   <packaging>maven-plugin</packaging>
 
   <name>Provided dependencies maven-plugin</name>
@@ -58,4 +58,10 @@
       <classifier>jdk15</classifier>
     </dependency>
   </dependencies>
+
+  <scm>
+    <connection>scm:svn:http://svn.sonatype.org/plugins/tags/provided-dependencies-maven-plugin-1.2</connection>
+    <developerConnection>scm:svn:https://svn.sonatype.org/plugins/tags/provided-dependencies-maven-plugin-1.2</developerConnection>
+    <url>http://svn.sonatype.org/plugins/tags/provided-dependencies-maven-plugin-1.2</url>
+  </scm>
 </project>
