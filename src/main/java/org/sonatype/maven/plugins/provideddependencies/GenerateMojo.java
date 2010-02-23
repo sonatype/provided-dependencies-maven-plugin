@@ -142,7 +142,8 @@ public class GenerateMojo
 
             if( Artifact.SCOPE_TEST.equals( artifact.getScope() ))
             {
-                dep.setScope( Artifact.SCOPE_TEST );
+//                dep.setScope( Artifact.SCOPE_TEST );
+                continue;
             }
             else
             {
