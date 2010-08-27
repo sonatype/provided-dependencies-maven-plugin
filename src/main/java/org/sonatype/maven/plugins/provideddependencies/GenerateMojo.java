@@ -132,7 +132,7 @@ public class GenerateMojo
     {
         List<Dependency> dependencies = new ArrayList<Dependency>();
         for ( Artifact artifact : artifacts )
-        {      
+        {
             Dependency dep = new Dependency();
             dep.setGroupId( artifact.getGroupId() );
             dep.setArtifactId( artifact.getArtifactId() );
@@ -140,16 +140,18 @@ public class GenerateMojo
             dep.setClassifier( artifact.getClassifier() );
             dep.setType( artifact.getType() );
 
-            if( Artifact.SCOPE_TEST.equals( artifact.getScope() ))
+            if ( Artifact.SCOPE_TEST.equals( artifact.getScope() )
+                || Artifact.SCOPE_SYSTEM.equals( artifact.getScope() )
+                || Artifact.SCOPE_IMPORT.equals( artifact.getScope() ) )
             {
-//                dep.setScope( Artifact.SCOPE_TEST );
+                // dep.setScope( Artifact.SCOPE_TEST );
                 continue;
             }
             else
             {
                 dep.setScope( scope );
             }
-            
+
             // using a set to prevent duplicated entries
             Set<String> exclusions = new LinkedHashSet<String>( getExclusions( artifact.getDependencyFilter() ) );
             for ( String exclusion : exclusions )
