@@ -9,7 +9,6 @@ import java.util.List;
 
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.artifact.ArtifactUtils;
-import org.apache.maven.artifact.factory.ArtifactFactory;
 import org.apache.maven.artifact.repository.ArtifactRepository;
 import org.apache.maven.model.Dependency;
 import org.apache.maven.model.DependencyManagement;
@@ -17,7 +16,6 @@ import org.apache.maven.model.Exclusion;
 import org.apache.maven.model.Model;
 import org.apache.maven.model.Scm;
 import org.apache.maven.model.io.xpp3.MavenXpp3Writer;
-import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.project.MavenProject;
@@ -35,18 +33,8 @@ import com.google.common.collect.Multimap;
  * @phase generate-resources
  */
 public class GenerateMojo
-    extends AbstractMojo
+    extends AbstractGenerationMojo
 {
-
-    /**
-     * @component
-     */
-    private ArtifactFactory artifactFactory;
-
-    /**
-     * @parameter default-value="${project.artifactId}-dependencies"
-     */
-    private String artifactId;
 
     /**
      * @parameter default-value="${project.artifacts}"
@@ -54,24 +42,8 @@ public class GenerateMojo
      */
     private Collection<Artifact> artifacts;
 
-    /**
-     * @parameter default-value="${project.artifactId}-compile"
-     */
-    private String compileDependenciesArtifactId;
-
-    /**
-     * @parameter default-value="${project.groupId}"
-     */
-    private String groupId;
-
     /** @parameter expression="${localRepository}" */
     private ArtifactRepository localRepository;
-
-    /**
-     * @parameter default-value="${project}"
-     * @readonly
-     */
-    private MavenProject project;
 
     /**
      * @component
@@ -80,17 +52,6 @@ public class GenerateMojo
 
     /** @parameter expression="${project.remoteArtifactRepositories}" */
     private List<? extends ArtifactRepository> remoteRepositories;
-
-    /**
-     * @parameter default-value="${project.build.directory}"
-     * @readonly
-     */
-    private File target;
-
-    /**
-     * @parameter default-value="${project.version}"
-     */
-    private String version;
 
     /**
      * @parameter default-value="${project.name}"
@@ -241,12 +202,12 @@ public class GenerateMojo
         return dependencies;
     }
 
-    private void persist( Model pom )
+    protected void persist( Model pom )
         throws MojoExecutionException
     {
-        String suffix = "-" + version + ".pom";
+        String suffix = "-" + version + "." + "pom";
         File file = new File( target, pom.getArtifactId() + suffix );
-
+    
         FileWriter writer = null;
         try
         {
@@ -259,10 +220,10 @@ public class GenerateMojo
             throw new MojoExecutionException( "Failed to generate pom", e );
         }
         IOUtil.close( writer );
-
+    
         Artifact artifact = artifactFactory.createArtifact( groupId, pom.getArtifactId(), version, null, "pom" );
         artifact.setFile( file );
-
+    
         project.addAttachedArtifact( artifact );
     }
 
