@@ -15,6 +15,7 @@ import org.apache.maven.model.Dependency;
 import org.apache.maven.model.DependencyManagement;
 import org.apache.maven.model.Exclusion;
 import org.apache.maven.model.Model;
+import org.apache.maven.model.Scm;
 import org.apache.maven.model.io.xpp3.MavenXpp3Writer;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
@@ -91,6 +92,36 @@ public class GenerateMojo
      */
     private String version;
 
+    /**
+     * @parameter default-value="${project.name}"
+     */
+    private String name;
+
+    /**
+     * @parameter default-value="${project.description}"
+     */
+    private String description;
+
+    /**
+     * @parameter default-value="${project.url}"
+     */
+    private String url;
+
+    /**
+     * @parameter default-value="${project.licenses}"
+     */
+    private List licenses;
+
+    /**
+     * @parameter default-value="${project.scm}"
+     */
+    private Scm scm;
+
+    /**
+     * @parameter default-value="${project.contributors}"
+     */
+    private List contributors;
+
     private void appendExclusions( Multimap<String, String> exclusions, List<Dependency> dependencies )
     {
         for ( Dependency dependency : dependencies )
@@ -146,17 +177,25 @@ public class GenerateMojo
         pom.setArtifactId( artifactId );
         pom.setVersion( version );
         pom.setPackaging( "pom" );
+        
+        pom.setName( name );
+        pom.setDescription( description );
+        pom.setUrl( url );
+        pom.setLicenses( licenses );
+        pom.setScm( scm );
+        pom.setContributors( contributors );
 
         DependencyManagement dependencyManagement = new DependencyManagement();
         dependencyManagement.setDependencies( getDependencies( Artifact.SCOPE_PROVIDED, exclusions ) );
         pom.setDependencyManagement( dependencyManagement );
 
-        persist( pom, "-dependencies.pom" );
+        persist( pom );
 
+        pom.setArtifactId( compileDependenciesArtifactId );
         pom.setDependencyManagement( null );
         pom.setDependencies( getDependencies( Artifact.SCOPE_COMPILE, exclusions ) );
-        pom.setArtifactId( compileDependenciesArtifactId );
-        persist( pom, "-compile.pom" );
+
+        persist( pom );
     }
 
     private List<Dependency> getDependencies( String scope, Multimap<String, String> exclusions )
@@ -202,9 +241,10 @@ public class GenerateMojo
         return dependencies;
     }
 
-    private void persist( Model pom, String suffix )
+    private void persist( Model pom )
         throws MojoExecutionException
     {
+        String suffix = "-" + version + ".pom";
         File file = new File( target, pom.getArtifactId() + suffix );
 
         FileWriter writer = null;
