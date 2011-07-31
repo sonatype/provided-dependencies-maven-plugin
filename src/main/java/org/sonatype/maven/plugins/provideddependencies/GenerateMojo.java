@@ -83,6 +83,11 @@ public class GenerateMojo
      */
     private List contributors;
 
+    /**
+     * @parameter default-value="${project.developers}"
+     */
+    private List developers;
+
     private void appendExclusions( Multimap<String, String> exclusions, List<Dependency> dependencies )
     {
         for ( Dependency dependency : dependencies )
@@ -145,6 +150,7 @@ public class GenerateMojo
         pom.setLicenses( licenses );
         pom.setScm( scm );
         pom.setContributors( contributors );
+        pom.setDevelopers( developers );
 
         DependencyManagement dependencyManagement = new DependencyManagement();
         dependencyManagement.setDependencies( getDependencies( Artifact.SCOPE_PROVIDED, exclusions ) );
