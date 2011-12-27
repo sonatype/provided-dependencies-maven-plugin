@@ -10,7 +10,7 @@
   </parent>
 
   <artifactId>provided-dependencies-maven-plugin</artifactId>
-  <version>1.5-SNAPSHOT</version>
+  <version>1.5</version>
   <packaging>maven-plugin</packaging>
 
   <name>Provided dependencies maven-plugin</name>
