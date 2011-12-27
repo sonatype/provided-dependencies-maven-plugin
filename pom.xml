@@ -5,7 +5,7 @@
   <parent>
     <groupId>org.sonatype.plugins</groupId>
     <artifactId>plugins-parent</artifactId>
-    <version>5</version>
+    <version>8</version>
     <relativePath>../plugins-parent/pom.xml</relativePath>
   </parent>
 
@@ -14,6 +14,12 @@
   <packaging>maven-plugin</packaging>
 
   <name>Provided dependencies maven-plugin</name>
+
+  <scm>
+    <connection>scm:git:git://github.com/sonatype/provided-dependencies-maven-plugin.git</connection>
+    <developerConnection>scm:git:git@github.com:sonatype/provided-dependencies-maven-plugin.git</developerConnection>
+    <url>https://github.com/sonatype/provided-dependencies-maven-plugin</url>
+  </scm>
 
   <build>
     <plugins>
