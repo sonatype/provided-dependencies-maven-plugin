@@ -1,12 +1,20 @@
+/*
+ * Copyright (c) 2007-2012 Sonatype, Inc. All rights reserved.
+ *
+ * This program is licensed to you under the Apache License Version 2.0,
+ * and you may not use this file except in compliance with the Apache License Version 2.0.
+ * You may obtain a copy of the Apache License Version 2.0 at http://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the Apache License Version 2.0 is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the Apache License Version 2.0 for the specific language governing permissions and limitations there under.
+ */
 package org.sonatype.maven.plugins.provideddependencies;
 
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-
+import com.google.common.collect.LinkedHashMultimap;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Multimap;
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.artifact.ArtifactUtils;
 import org.apache.maven.artifact.repository.ArtifactRepository;
@@ -14,7 +22,6 @@ import org.apache.maven.model.Dependency;
 import org.apache.maven.model.DependencyManagement;
 import org.apache.maven.model.Exclusion;
 import org.apache.maven.model.Model;
-import org.apache.maven.model.Scm;
 import org.apache.maven.model.io.xpp3.MavenXpp3Writer;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
@@ -23,97 +30,80 @@ import org.apache.maven.project.MavenProjectBuilder;
 import org.apache.maven.project.ProjectBuildingException;
 import org.codehaus.plexus.util.IOUtil;
 
-import com.google.common.collect.LinkedHashMultimap;
-import com.google.common.collect.Multimap;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.Writer;
+import java.util.Collection;
+import java.util.List;
+
+import static org.apache.maven.artifact.Artifact.SCOPE_IMPORT;
+import static org.apache.maven.artifact.Artifact.SCOPE_SYSTEM;
+import static org.apache.maven.artifact.Artifact.SCOPE_TEST;
 
 /**
- * @author velo
+ * Generate {@code *-dependencies} and {@code *-compile} POM files.
+ *
  * @goal generate
- * @requiresDependencyResolution test
  * @phase generate-resources
+ * @requiresDependencyResolution test
  */
 public class GenerateMojo
-    extends AbstractGenerationMojo
+    extends MojoSupport
 {
-
-    /**
-     * @parameter default-value="${project.artifacts}"
-     * @readonly
-     */
-    private Collection<Artifact> artifacts;
-
-    /** @parameter expression="${localRepository}" */
-    private ArtifactRepository localRepository;
-
     /**
      * @component
      */
     private MavenProjectBuilder projectBuilder;
 
-    /** @parameter expression="${project.remoteArtifactRepositories}" */
-    private List<? extends ArtifactRepository> remoteRepositories;
-
     /**
-     * @parameter default-value="${project.name}"
+     * @parameter expression="${localRepository}"
      */
-    private String name;
+    private ArtifactRepository localRepository;
 
-    /**
-     * @parameter default-value="${project.description}"
-     */
-    private String description;
+    private Multimap<String, String> exclusions;
 
-    /**
-     * @parameter default-value="${project.url}"
-     */
-    private String url;
-
-    /**
-     * @parameter default-value="${project.licenses}"
-     */
-    private List licenses;
-
-    /**
-     * @parameter default-value="${project.scm}"
-     */
-    private Scm scm;
-
-    /**
-     * @parameter default-value="${project.contributors}"
-     */
-    private List contributors;
-
-    /**
-     * @parameter default-value="${project.developers}"
-     */
-    private List developers;
-
-    private void appendExclusions( Multimap<String, String> exclusions, List<Dependency> dependencies )
+    public void execute()
+        throws MojoExecutionException, MojoFailureException
     {
-        for ( Dependency dependency : dependencies )
-        {
-            List<Exclusion> excls = dependency.getExclusions();
-            if ( !excls.isEmpty() )
-            {
-                for ( Exclusion excl : excls )
-                {
-                    exclusions.put(
-                        ArtifactUtils.versionlessKey( dependency.getGroupId(), dependency.getArtifactId() ),
-                        ArtifactUtils.versionlessKey( excl.getGroupId(), excl.getArtifactId() ) );
-                }
-            }
-        }
+        exclusions = collectExclusions();
+
+        Model pom = new Model();
+        pom.setModelVersion( "4.0.0" );
+        pom.setGroupId( groupId );
+        pom.setArtifactId( dependenciesArtifactId );
+        pom.setVersion( version );
+        pom.setPackaging( "pom" );
+        pom.setLicenses( project.getLicenses() );
+
+        List<Dependency> dependencies = getDependencies();
+
+        DependencyManagement dependencyManagement = new DependencyManagement();
+        dependencyManagement.setDependencies( dependencies );
+        pom.setDependencyManagement( dependencyManagement );
+
+        persist( pom );
+
+        pom.setArtifactId(compileArtifactId);
+        pom.setDependencyManagement( null );
+        pom.setDependencies( dependencies );
+
+        persist( pom );
     }
 
+    /**
+     * Builds a multimap of dependency artifactId:groupId to exclusions artifactId:groupId.
+     */
     private Multimap<String, String> collectExclusions()
     {
         Multimap<String, String> exclusions = LinkedHashMultimap.create();
-        for ( Artifact artifact : artifacts )
+        for ( Artifact artifact : project.getArtifacts() )
         {
             MavenProject p;
             try
             {
-                p = projectBuilder.buildFromRepository( artifact, remoteRepositories, localRepository );
+                p = projectBuilder.buildFromRepository( artifact, project.getRemoteArtifactRepositories(), localRepository );
             }
             catch ( ProjectBuildingException e )
             {
@@ -131,45 +121,39 @@ public class GenerateMojo
         return exclusions;
     }
 
-    public void execute()
-        throws MojoExecutionException, MojoFailureException
+    private void appendExclusions( final Multimap<String, String> exclusions, final List<Dependency> dependencies )
     {
-
-        Multimap<String, String> exclusions = collectExclusions();
-
-        Model pom = new Model();
-        pom.setModelVersion( "4.0.0" );
-        pom.setGroupId( groupId );
-        pom.setArtifactId( artifactId );
-        pom.setVersion( version );
-        pom.setPackaging( "pom" );
-        
-        pom.setName( name );
-        pom.setDescription( description );
-        pom.setUrl( url );
-        pom.setLicenses( licenses );
-        pom.setScm( scm );
-        pom.setContributors( contributors );
-        pom.setDevelopers( developers );
-
-        DependencyManagement dependencyManagement = new DependencyManagement();
-        dependencyManagement.setDependencies( getDependencies( Artifact.SCOPE_PROVIDED, exclusions ) );
-        pom.setDependencyManagement( dependencyManagement );
-
-        persist( pom );
-
-        pom.setArtifactId( compileDependenciesArtifactId );
-        pom.setDependencyManagement( null );
-        pom.setDependencies( getDependencies( Artifact.SCOPE_COMPILE, exclusions ) );
-
-        persist( pom );
+        for ( Dependency dependency : dependencies )
+        {
+            List<Exclusion> excls = dependency.getExclusions();
+            if ( !excls.isEmpty() )
+            {
+                for ( Exclusion excl : excls )
+                {
+                    // FIXME: Unsure why we don't simply map to an Exclusion instance
+                    // FIXME: ... so we don't have to think about parsing this out later when we configure the dependency
+                    exclusions.put(
+                        ArtifactUtils.versionlessKey( dependency.getGroupId(), dependency.getArtifactId() ),
+                        ArtifactUtils.versionlessKey( excl.getGroupId(), excl.getArtifactId() ) );
+                }
+            }
+        }
     }
 
-    private List<Dependency> getDependencies( String scope, Multimap<String, String> exclusions )
+    private List<Dependency> getDependencies()
     {
-        List<Dependency> dependencies = new ArrayList<Dependency>();
-        for ( Artifact artifact : artifacts )
+        List<Dependency> dependencies = Lists.newArrayList();
+        for ( Artifact artifact : project.getArtifacts() )
         {
+            // skip test, system and import scope dependencies
+            if ( SCOPE_TEST.equals( artifact.getScope() ) ||
+                 SCOPE_SYSTEM.equals( artifact.getScope() ) ||
+                 SCOPE_IMPORT.equals( artifact.getScope() ) )
+            {
+                // do not include
+                continue;
+            }
+
             Dependency dep = new Dependency();
             dep.setGroupId( artifact.getGroupId() );
             dep.setArtifactId( artifact.getArtifactId() );
@@ -177,30 +161,7 @@ public class GenerateMojo
             dep.setClassifier( artifact.getClassifier() );
             dep.setType( artifact.getType() );
 
-            if ( Artifact.SCOPE_TEST.equals( artifact.getScope() )
-                || Artifact.SCOPE_SYSTEM.equals( artifact.getScope() )
-                || Artifact.SCOPE_IMPORT.equals( artifact.getScope() ) )
-            {
-                // dep.setScope( Artifact.SCOPE_TEST );
-                continue;
-            }
-            else
-            {
-                dep.setScope( scope );
-            }
-
-            Collection<String> excls = exclusions.get( ArtifactUtils.versionlessKey( artifact ) );
-            for ( String exclusion : excls )
-            {
-                String[] pattern = exclusion.split( ":" );
-                if ( pattern.length == 2 )
-                {
-                    Exclusion ex = new Exclusion();
-                    ex.setGroupId( pattern[0] );
-                    ex.setArtifactId( pattern[1] );
-                    dep.addExclusion( ex );
-                }
-            }
+            configureExclusions(artifact, dep);
 
             dependencies.add( dep );
         }
@@ -208,26 +169,46 @@ public class GenerateMojo
         return dependencies;
     }
 
-    protected void persist( Model pom )
+    private void configureExclusions( final Artifact artifact, final Dependency dependency )
+    {
+        Collection<String> excls = exclusions.get( ArtifactUtils.versionlessKey(artifact) );
+        for ( String exclusion : excls )
+        {
+            String[] pattern = exclusion.split( ":" );
+            if ( pattern.length == 2 )
+            {
+                Exclusion ex = new Exclusion();
+                ex.setGroupId( pattern[0] );
+                ex.setArtifactId( pattern[1] );
+                dependency.addExclusion(ex);
+            }
+        }
+    }
+
+    protected void persist( final Model pom )
         throws MojoExecutionException
     {
-        String suffix = "-" + version + "." + "pom";
-        File file = new File( target, pom.getArtifactId() + suffix );
-    
-        FileWriter writer = null;
+        File file = new File(outputDirectory, String.format("%s-%s.pom", pom.getArtifactId(), pom.getVersion()));
+        file.getParentFile().mkdirs();
+
+        getLog().info("Generating POM file: " + file.getAbsolutePath());
+
+        Writer writer = null;
         try
         {
-            file.createNewFile();
-            writer = new FileWriter( file );
+            writer = new BufferedWriter(new FileWriter( file ));
             new MavenXpp3Writer().write( writer, pom );
         }
         catch ( IOException e )
         {
-            throw new MojoExecutionException( "Failed to generate pom", e );
+            throw new MojoExecutionException( "Failed to generate POM file: " + file.getAbsolutePath(), e );
         }
-        IOUtil.close( writer );
-    
-        Artifact artifact = artifactFactory.createArtifact( groupId, pom.getArtifactId(), version, null, "pom" );
+        finally
+        {
+            IOUtil.close( writer );
+        }
+
+        Artifact artifact = artifactFactory.createArtifact( pom.getGroupId(), pom.getArtifactId(), pom.getVersion(), null, "pom" );
         artifact.setFile( file );
     
         project.addAttachedArtifact( artifact );
