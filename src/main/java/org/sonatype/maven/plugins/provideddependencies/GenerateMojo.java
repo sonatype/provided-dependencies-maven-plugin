@@ -113,6 +113,7 @@ public class GenerateMojo
         pom.setGroupId( groupId );
         pom.setVersion( version );
         pom.setPackaging( "pom" );
+        pom.setOrganization( project.getOrganization() );
         pom.setLicenses( project.getLicenses() );
 
         List<Dependency> dependencies = getDependencies();
