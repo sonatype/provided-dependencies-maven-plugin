@@ -10,6 +10,7 @@
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the Apache License Version 2.0 for the specific language governing permissions and limitations there under.
  */
+
 package org.sonatype.maven.plugins.provideddependencies;
 
 import com.google.common.collect.LinkedHashMultimap;
@@ -17,6 +18,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Multimap;
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.artifact.repository.ArtifactRepository;
+import org.apache.maven.artifact.resolver.filter.ArtifactFilter;
 import org.apache.maven.model.Dependency;
 import org.apache.maven.model.DependencyManagement;
 import org.apache.maven.model.Exclusion;
@@ -28,6 +30,7 @@ import org.apache.maven.project.MavenProject;
 import org.apache.maven.project.MavenProjectBuilder;
 import org.apache.maven.project.ProjectBuildingException;
 
+import javax.annotation.Nullable;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
@@ -45,7 +48,7 @@ import static org.apache.maven.artifact.ArtifactUtils.versionlessKey;
  * Generate {@code *-dependencies} and {@code *-compile} POM files.
  *
  * @goal generate
- * @phase generate-resources
+ * @phase prepare-package
  * @requiresDependencyResolution test
  */
 public class GenerateMojo
@@ -104,7 +107,8 @@ public class GenerateMojo
     private Multimap<String, GroupArtifact> exclusions;
 
     private String description(final String flavor) {
-        return String.format("Automatically generated POM (created by provided-dependencies-maven-plugin) for %s:%s:%s containing all known dependencies as '%s' entries.",
+        return String.format(
+            "Automatically generated POM (created by provided-dependencies-maven-plugin) for %s:%s:%s containing all known dependencies as '%s' entries.",
             project.getGroupId(), project.getArtifactId(), project.getVersion(), flavor);
     }
 
@@ -114,110 +118,116 @@ public class GenerateMojo
         exclusions = collectExclusions();
 
         Model pom = new Model();
-        pom.setModelVersion( "4.0.0" );
+        pom.setModelVersion("4.0.0");
         pom.setGroupId(groupId);
         pom.setVersion(version);
         pom.setPackaging("pom");
-        pom.setOrganization( project.getOrganization() );
-        pom.setLicenses( project.getLicenses() );
-
-        List<Dependency> dependencies = getDependencies();
+        pom.setOrganization(project.getOrganization());
+        pom.setLicenses(project.getLicenses());
 
         // build *-dependencies.pom
+        getLog().debug("Generating: " + dependenciesArtifactId);
         pom.setDescription(description("dependencyManagement/dependencies"));
         pom.setArtifactId(dependenciesArtifactId);
         DependencyManagement dependencyManagement = new DependencyManagement();
-        dependencyManagement.setDependencies( dependencies );
-        pom.setDependencyManagement( dependencyManagement );
-        persist( pom );
+        dependencyManagement.setDependencies(collectDependencies(new ArtifactFilter()
+        {
+            // exclude scope 'system' and 'import'
+            public boolean include(final Artifact artifact) {
+                return !(
+                    SCOPE_SYSTEM.equals(artifact.getScope()) || SCOPE_IMPORT.equals(artifact.getScope())
+                );
+            }
+        }));
+        pom.setDependencyManagement(dependencyManagement);
+        persist(pom);
+
+        // FIXME: Consider killing generation of this (*-compile) POM... not sure there is any *valid* use of it at all
 
         // build *-compile.pom
+        getLog().debug("Generating: " + compileArtifactId);
         pom.setDescription(description("dependencies"));
-        pom.setArtifactId( compileArtifactId );
-        pom.setDependencyManagement( null );
-        pom.setDependencies( dependencies );
-        persist( pom );
+        pom.setArtifactId(compileArtifactId);
+        pom.setDependencyManagement(null);
+        pom.setDependencies(collectDependencies(new ArtifactFilter()
+        {
+            // exclude scope 'test', 'system' and 'import'
+            public boolean include(final Artifact artifact) {
+                return !(
+                    SCOPE_TEST.equals(artifact.getScope()) || SCOPE_SYSTEM.equals(artifact.getScope()) || SCOPE_IMPORT.equals(artifact.getScope())
+                );
+            }
+        }));
+        persist(pom);
     }
 
     /**
      * Builds a multimap of dependency groupId:artifactId to exclusions {@link GroupArtifact}.
      */
-    private Multimap<String, GroupArtifact> collectExclusions()
-    {
+    private Multimap<String, GroupArtifact> collectExclusions() {
         Multimap<String, GroupArtifact> mapping = LinkedHashMultimap.create();
 
-        for ( Artifact artifact : project.getArtifacts() )
-        {
+        for (Artifact artifact : project.getArtifacts()) {
             MavenProject p;
-            try
-            {
-                p = projectBuilder.buildFromRepository( artifact, project.getRemoteArtifactRepositories(), localRepository );
+            try {
+                p = projectBuilder.buildFromRepository(artifact, project.getRemoteArtifactRepositories(), localRepository);
             }
-            catch ( ProjectBuildingException e )
-            {
+            catch (ProjectBuildingException e) {
                 // ignore
                 continue;
             }
 
-            appendExclusions( mapping, p.getDependencies() );
+            appendExclusions(mapping, p.getDependencies());
 
-            if ( p.getDependencyManagement() != null )
-            {
-                appendExclusions( mapping, p.getDependencyManagement().getDependencies() );
+            if (p.getDependencyManagement() != null) {
+                appendExclusions(mapping, p.getDependencyManagement().getDependencies());
             }
         }
 
         return mapping;
     }
 
-    private void appendExclusions( final Multimap<String, GroupArtifact> mapping, final List<Dependency> dependencies )
-    {
-        for ( Dependency dependency : dependencies )
-        {
-            for ( Exclusion exclusion : dependency.getExclusions() )
-            {
+    private void appendExclusions(final Multimap<String, GroupArtifact> mapping, final List<Dependency> dependencies) {
+        for (Dependency dependency : dependencies) {
+            for (Exclusion exclusion : dependency.getExclusions()) {
                 mapping.put(versionlessKey(dependency.getGroupId(), dependency.getArtifactId()),
                     new GroupArtifact(exclusion.getGroupId(), exclusion.getArtifactId()));
             }
         }
     }
 
-    private List<Dependency> getDependencies()
-    {
+    private List<Dependency> collectDependencies(final @Nullable ArtifactFilter filter) {
         List<Dependency> dependencies = Lists.newArrayList();
-        for ( Artifact artifact : project.getArtifacts() )
-        {
-            // skip test, system and import scope dependencies
-            if ( SCOPE_TEST.equals( artifact.getScope() ) ||
-                 SCOPE_SYSTEM.equals( artifact.getScope() ) ||
-                 SCOPE_IMPORT.equals( artifact.getScope() ) )
-            {
-                // do not include
+        for (Artifact artifact : project.getArtifacts()) {
+            if (filter != null && !filter.include(artifact)) {
+                getLog().debug("Excluding: " + artifact);
                 continue;
+            }
+            else {
+                getLog().debug("Including: " + artifact);
             }
 
             Dependency dep = new Dependency();
-            dep.setGroupId( artifact.getGroupId() );
-            dep.setArtifactId( artifact.getArtifactId() );
-            dep.setVersion( artifact.getBaseVersion() );
-            dep.setClassifier( artifact.getClassifier() );
-            dep.setType( artifact.getType() );
+            dep.setGroupId(artifact.getGroupId());
+            dep.setArtifactId(artifact.getArtifactId());
+            dep.setVersion(artifact.getBaseVersion());
+            dep.setClassifier(artifact.getClassifier());
+            dep.setType(artifact.getType());
 
-            for ( GroupArtifact ga : exclusions.get( versionlessKey(artifact) ) )
-            {
+            for (GroupArtifact ga : exclusions.get(versionlessKey(artifact))) {
                 Exclusion exclusion = new Exclusion();
                 exclusion.setGroupId(ga.groupId);
                 exclusion.setArtifactId(ga.artifactId);
                 dep.addExclusion(exclusion);
             }
 
-            dependencies.add( dep );
+            dependencies.add(dep);
         }
 
         return dependencies;
     }
 
-    protected void persist( final Model pom )
+    protected void persist(final Model pom)
         throws MojoExecutionException
     {
         File file = new File(outputDirectory, String.format("%s-%s.pom", pom.getArtifactId(), pom.getVersion()));
@@ -225,22 +235,20 @@ public class GenerateMojo
 
         getLog().info("Generating POM file: " + file.getAbsolutePath());
 
-        try
-        {
-            Writer writer = new BufferedWriter(new FileWriter( file ));
-            new MavenXpp3Writer().write( writer, pom );
+        try {
+            Writer writer = new BufferedWriter(new FileWriter(file));
+            new MavenXpp3Writer().write(writer, pom);
             writer.flush();
             writer.close();
         }
-        catch ( IOException e )
-        {
-            throw new MojoExecutionException( "Failed to generate POM file: " + file.getAbsolutePath(), e );
+        catch (IOException e) {
+            throw new MojoExecutionException("Failed to generate POM file: " + file.getAbsolutePath(), e);
         }
 
-        Artifact artifact = artifactFactory.createArtifact( pom.getGroupId(), pom.getArtifactId(), pom.getVersion(), null, "pom" );
-        artifact.setFile( file );
-    
-        project.addAttachedArtifact( artifact );
+        Artifact artifact = artifactFactory.createArtifact(pom.getGroupId(), pom.getArtifactId(), pom.getVersion(), null, "pom");
+        artifact.setFile(file);
+
+        project.addAttachedArtifact(artifact);
     }
 
 }
