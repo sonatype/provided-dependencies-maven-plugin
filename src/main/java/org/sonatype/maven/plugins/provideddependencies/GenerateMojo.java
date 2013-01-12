@@ -106,11 +106,7 @@ public class GenerateMojo
 
     private Multimap<String, GroupArtifact> exclusions;
 
-    private String description(final String flavor) {
-        return String.format(
-            "Automatically generated POM (created by provided-dependencies-maven-plugin) for %s:%s:%s containing all known dependencies as '%s' entries.",
-            project.getGroupId(), project.getArtifactId(), project.getVersion(), flavor);
-    }
+    // FIXME: Look into how we can use the projects existing DM and use that, so that project doesn't need direct dep to promote to DM here.
 
     public void execute()
         throws MojoExecutionException, MojoFailureException
@@ -159,6 +155,12 @@ public class GenerateMojo
             }
         }));
         persist(pom);
+    }
+
+    private String description(final String flavor) {
+        return String.format(
+            "Automatically generated POM (created by provided-dependencies-maven-plugin) for %s:%s:%s containing all known dependencies as '%s' entries.",
+            project.getGroupId(), project.getArtifactId(), project.getVersion(), flavor);
     }
 
     /**
