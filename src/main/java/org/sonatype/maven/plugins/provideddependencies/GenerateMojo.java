@@ -16,7 +16,6 @@ import com.google.common.collect.LinkedHashMultimap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Multimap;
 import org.apache.maven.artifact.Artifact;
-import org.apache.maven.artifact.ArtifactUtils;
 import org.apache.maven.artifact.repository.ArtifactRepository;
 import org.apache.maven.model.Dependency;
 import org.apache.maven.model.DependencyManagement;
@@ -28,19 +27,19 @@ import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.project.MavenProject;
 import org.apache.maven.project.MavenProjectBuilder;
 import org.apache.maven.project.ProjectBuildingException;
-import org.codehaus.plexus.util.IOUtil;
 
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.Writer;
-import java.util.Collection;
 import java.util.List;
 
+import static com.google.common.base.Preconditions.checkNotNull;
 import static org.apache.maven.artifact.Artifact.SCOPE_IMPORT;
 import static org.apache.maven.artifact.Artifact.SCOPE_SYSTEM;
 import static org.apache.maven.artifact.Artifact.SCOPE_TEST;
+import static org.apache.maven.artifact.ArtifactUtils.versionlessKey;
 
 /**
  * Generate {@code *-dependencies} and {@code *-compile} POM files.
@@ -62,7 +61,47 @@ public class GenerateMojo
      */
     private ArtifactRepository localRepository;
 
-    private Multimap<String, String> exclusions;
+    /**
+     * Representation of {@code groupId:artifactId} for use in collections.
+     */
+    private static class GroupArtifact
+    {
+        public final String groupId;
+
+        public final String artifactId;
+
+        private GroupArtifact(final String groupId, final String artifactId) {
+            this.groupId = checkNotNull(groupId);
+            this.artifactId = checkNotNull(artifactId);
+        }
+
+        @Override
+        public boolean equals(final Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+
+            GroupArtifact that = (GroupArtifact) o;
+
+            if (!artifactId.equals(that.artifactId)) return false;
+            if (!groupId.equals(that.groupId)) return false;
+
+            return true;
+        }
+
+        @Override
+        public int hashCode() {
+            int result = groupId.hashCode();
+            result = 31 * result + artifactId.hashCode();
+            return result;
+        }
+
+        @Override
+        public String toString() {
+            return versionlessKey(groupId, artifactId);
+        }
+    }
+
+    private Multimap<String, GroupArtifact> exclusions;
 
     public void execute()
         throws MojoExecutionException, MojoFailureException
@@ -72,32 +111,33 @@ public class GenerateMojo
         Model pom = new Model();
         pom.setModelVersion( "4.0.0" );
         pom.setGroupId( groupId );
-        pom.setArtifactId( dependenciesArtifactId );
         pom.setVersion( version );
         pom.setPackaging( "pom" );
         pom.setLicenses( project.getLicenses() );
 
         List<Dependency> dependencies = getDependencies();
 
+        // build *-dependencies.pom
+        pom.setArtifactId( dependenciesArtifactId );
         DependencyManagement dependencyManagement = new DependencyManagement();
         dependencyManagement.setDependencies( dependencies );
         pom.setDependencyManagement( dependencyManagement );
-
         persist( pom );
 
-        pom.setArtifactId(compileArtifactId);
+        // build *-compile.pom
+        pom.setArtifactId( compileArtifactId );
         pom.setDependencyManagement( null );
         pom.setDependencies( dependencies );
-
         persist( pom );
     }
 
     /**
-     * Builds a multimap of dependency artifactId:groupId to exclusions artifactId:groupId.
+     * Builds a multimap of dependency groupId:artifactId to exclusions {@link GroupArtifact}.
      */
-    private Multimap<String, String> collectExclusions()
+    private Multimap<String, GroupArtifact> collectExclusions()
     {
-        Multimap<String, String> exclusions = LinkedHashMultimap.create();
+        Multimap<String, GroupArtifact> mapping = LinkedHashMultimap.create();
+
         for ( Artifact artifact : project.getArtifacts() )
         {
             MavenProject p;
@@ -111,31 +151,25 @@ public class GenerateMojo
                 continue;
             }
 
-            appendExclusions( exclusions, p.getDependencies() );
+            appendExclusions( mapping, p.getDependencies() );
+
             if ( p.getDependencyManagement() != null )
             {
-                appendExclusions( exclusions, p.getDependencyManagement().getDependencies() );
+                appendExclusions( mapping, p.getDependencyManagement().getDependencies() );
             }
         }
 
-        return exclusions;
+        return mapping;
     }
 
-    private void appendExclusions( final Multimap<String, String> exclusions, final List<Dependency> dependencies )
+    private void appendExclusions( final Multimap<String, GroupArtifact> mapping, final List<Dependency> dependencies )
     {
         for ( Dependency dependency : dependencies )
         {
-            List<Exclusion> excls = dependency.getExclusions();
-            if ( !excls.isEmpty() )
+            for ( Exclusion exclusion : dependency.getExclusions() )
             {
-                for ( Exclusion excl : excls )
-                {
-                    // FIXME: Unsure why we don't simply map to an Exclusion instance
-                    // FIXME: ... so we don't have to think about parsing this out later when we configure the dependency
-                    exclusions.put(
-                        ArtifactUtils.versionlessKey( dependency.getGroupId(), dependency.getArtifactId() ),
-                        ArtifactUtils.versionlessKey( excl.getGroupId(), excl.getArtifactId() ) );
-                }
+                mapping.put(versionlessKey(dependency.getGroupId(), dependency.getArtifactId()),
+                    new GroupArtifact(exclusion.getGroupId(), exclusion.getArtifactId()));
             }
         }
     }
@@ -161,28 +195,18 @@ public class GenerateMojo
             dep.setClassifier( artifact.getClassifier() );
             dep.setType( artifact.getType() );
 
-            configureExclusions(artifact, dep);
+            for ( GroupArtifact ga : exclusions.get( versionlessKey(artifact) ) )
+            {
+                Exclusion exclusion = new Exclusion();
+                exclusion.setGroupId(ga.groupId);
+                exclusion.setArtifactId(ga.artifactId);
+                dep.addExclusion(exclusion);
+            }
 
             dependencies.add( dep );
         }
 
         return dependencies;
-    }
-
-    private void configureExclusions( final Artifact artifact, final Dependency dependency )
-    {
-        Collection<String> excls = exclusions.get( ArtifactUtils.versionlessKey(artifact) );
-        for ( String exclusion : excls )
-        {
-            String[] pattern = exclusion.split( ":" );
-            if ( pattern.length == 2 )
-            {
-                Exclusion ex = new Exclusion();
-                ex.setGroupId( pattern[0] );
-                ex.setArtifactId( pattern[1] );
-                dependency.addExclusion(ex);
-            }
-        }
     }
 
     protected void persist( final Model pom )
@@ -193,19 +217,16 @@ public class GenerateMojo
 
         getLog().info("Generating POM file: " + file.getAbsolutePath());
 
-        Writer writer = null;
         try
         {
-            writer = new BufferedWriter(new FileWriter( file ));
+            Writer writer = new BufferedWriter(new FileWriter( file ));
             new MavenXpp3Writer().write( writer, pom );
+            writer.flush();
+            writer.close();
         }
         catch ( IOException e )
         {
             throw new MojoExecutionException( "Failed to generate POM file: " + file.getAbsolutePath(), e );
-        }
-        finally
-        {
-            IOUtil.close( writer );
         }
 
         Artifact artifact = artifactFactory.createArtifact( pom.getGroupId(), pom.getArtifactId(), pom.getVersion(), null, "pom" );
