@@ -103,6 +103,11 @@ public class GenerateMojo
 
     private Multimap<String, GroupArtifact> exclusions;
 
+    private String description(final String flavor) {
+        return String.format("Automatically generated POM (created by provided-dependencies-maven-plugin) for %s:%s:%s containing all known dependencies as '%s' entries.",
+            project.getGroupId(), project.getArtifactId(), project.getVersion(), flavor);
+    }
+
     public void execute()
         throws MojoExecutionException, MojoFailureException
     {
@@ -110,24 +115,24 @@ public class GenerateMojo
 
         Model pom = new Model();
         pom.setModelVersion( "4.0.0" );
-        pom.setGroupId( groupId );
-        pom.setVersion( version );
-        pom.setPackaging( "pom" );
+        pom.setGroupId(groupId);
+        pom.setVersion(version);
+        pom.setPackaging("pom");
         pom.setOrganization( project.getOrganization() );
         pom.setLicenses( project.getLicenses() );
 
         List<Dependency> dependencies = getDependencies();
 
-        // TODO: Consider adding meaningful description to both of these to explain what they are... since its a big magical.
-
         // build *-dependencies.pom
-        pom.setArtifactId( dependenciesArtifactId );
+        pom.setDescription(description("dependencyManagement/dependencies"));
+        pom.setArtifactId(dependenciesArtifactId);
         DependencyManagement dependencyManagement = new DependencyManagement();
         dependencyManagement.setDependencies( dependencies );
         pom.setDependencyManagement( dependencyManagement );
         persist( pom );
 
         // build *-compile.pom
+        pom.setDescription(description("dependencies"));
         pom.setArtifactId( compileArtifactId );
         pom.setDependencyManagement( null );
         pom.setDependencies( dependencies );
