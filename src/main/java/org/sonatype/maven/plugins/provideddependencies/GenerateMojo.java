@@ -118,6 +118,8 @@ public class GenerateMojo
 
         List<Dependency> dependencies = getDependencies();
 
+        // TODO: Consider adding meaningful description to both of these to explain what they are... since its a big magical.
+
         // build *-dependencies.pom
         pom.setArtifactId( dependenciesArtifactId );
         DependencyManagement dependencyManagement = new DependencyManagement();
