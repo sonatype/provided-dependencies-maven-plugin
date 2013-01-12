@@ -36,26 +36,36 @@ public abstract class MojoSupport
     protected ArtifactFactory artifactFactory;
 
     /**
+     * The location where generated POM files will be saved.
+     *
      * @parameter default-value="${project.build.directory}"
      */
     protected File outputDirectory;
 
     /**
+     * The groupId of the generated POM files.
+     *
      * @parameter default-value="${project.groupId}"
      */
     protected String groupId;
 
     /**
+     * The artifactId of the dependencies POM (which has dependenciesManagement entries).
+     *
      * @parameter default-value="${project.artifactId}-dependencies"
      */
     protected String dependenciesArtifactId;
 
     /**
+     * The artifactId of the compile POM (which has dependencies entries).
+     *
      * @parameter default-value="${project.artifactId}-compile"
      */
     protected String compileArtifactId;
 
     /**
+     * The (artifact) version of the generated POM files.
+     *
      * @parameter default-value="${project.version}"
      */
     protected String version;
